@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import * as FlexSDK from "@twilio/flex-sdk";
+import {Worker} from "@twilio/flex-sdk/taskrouter";
 
 interface Props { 
     setAppClient: (client: FlexSDK.Client) => void;
+    client : FlexSDK.Client | undefined;
 }
 
-export function CreateTwilioClient({ setAppClient }: Props) {
-    const [isAutoAcceptEnabled, setIsAutoAcceptEnabled] = useState(false);
-    const [worker, setWorker] = useState<FlexSDK.Worker | null>(null);
+export function CreateTwilioClient({ setAppClient, client }: Props) {
+    const [worker, setWorker] = useState<  Worker| null>(null);
+    const [message, setMessage] = useState<string | null>(null);
+
 
     async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -19,38 +22,29 @@ export function CreateTwilioClient({ setAppClient }: Props) {
         try {
             const client1 = await FlexSDK.createClient(token);
             const workerInstance = await client1.worker;
-
+            await new Promise<void>(resolve => {
+                workerInstance.on("ready", () => {
+                    resolve();
+                });
+            });
             setWorker(workerInstance);
             setAppClient(client1);
+            setMessage("Client created successfully!");
             console.log("Here's the client", client1);
         } catch (e) {
             console.error("Error creating client", e);
+            setMessage("Error creating client: " + (e instanceof Error ? e.message : "Unknown error"));
         }
     }
 
-    function handleReservationCreated(reservation: { task?: { sid?: string } }) {
-        console.log("Reservation created:", reservation);
-        if (reservation.task?.sid) {
-            console.log("Accepted Task with Sid", reservation.task.sid);
-        }
+    async function handleAcceptTask() {
+        const reservationsArray: FlexSDK.Reservation[] = Array.from(worker.reservations.values());
+        console.log(Array.from(worker.reservations.values()));
+        const reservation = reservationsArray[0];
+        await client?.execute(new FlexSDK.AcceptTask(reservation.task.sid));
+        setMessage(`Task ${reservation.task.sid} accepted`);
+
     }
-
-    useEffect(() => {
-        if (worker) {
-            if (isAutoAcceptEnabled) {
-                worker.on("reservationCreated", handleReservationCreated);
-            } else {
-                worker.off("reservationCreated", handleReservationCreated);
-            }
-        }
-
-        // Cleanup function to remove the listener when the component unmounts or `worker` changes
-        return () => {
-            if (worker) {
-                worker.off("reservationCreated", handleReservationCreated);
-            }
-        };
-    }, [isAutoAcceptEnabled, worker]);
 
     return (
         <div style={{ border: "1px solid black", padding: "20px", width: "100%", maxWidth: "600px" }}>
@@ -59,16 +53,20 @@ export function CreateTwilioClient({ setAppClient }: Props) {
                     <label>token:</label>
                     <input name="token" />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", marginBottom: "10px" }}>
-                    <label style={{ marginRight: "10px" }}>Auto Accept Reservations:</label>
-                    <input
-                        type="checkbox"
-                        checked={isAutoAcceptEnabled}
-                        onChange={(e) => setIsAutoAcceptEnabled(e.target.checked)}
-                    />
-                </div>
                 <button type="submit" style={{ marginTop: "10px" }}>createClient</button>
             </form>
+            <button 
+                onClick={handleAcceptTask} 
+                style={{ 
+                    width: "100%", 
+                    marginTop: "10px",
+                    padding: "8px 0",
+                    marginBottom: "10px" 
+                }}  
+            >
+                Accept Task
+            </button>
+            {message && <div style={{ marginTop: "10px", color: message.startsWith("Error") ? "red" : "green" }}>{message}</div>}
         </div>
     );
 }

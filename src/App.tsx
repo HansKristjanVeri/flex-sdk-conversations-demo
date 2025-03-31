@@ -21,7 +21,7 @@ function App() {
     <>
      <div  style={{ padding: "10px 0" }}>
       <h1>Flex-SDK Messaging Actions</h1>
-      <CreateTwilioClient setAppClient={setClient}/>
+      <CreateTwilioClient setAppClient={setClient} client={client}/>
     </div>
 
     <div style={{ padding: "10px 0" }}>
